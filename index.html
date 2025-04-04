@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ankara Namaz Vakitleri</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #0B3D0B;
+      color: white;
+      text-shadow: 1px 1px 2px #000;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-evenly;
+      height: 100vh;
+      padding: 20px;
+    }
+    .date {
+      text-align: center;
+      font-size: 1.8em;
+      margin-bottom: 20px;
+    }
+    .prayer-time {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 12px;
+      padding: 12px 20px;
+      margin: 5px 0;
+      font-size: 1.4em;
+    }
+    .highlight {
+      background: rgba(255, 255, 255, 0.3);
+      border: 2px solid white;
+    }
+    .countdown {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 1.4em;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="date" id="todayDate">Tarih</div>
+    <div class="prayer-time" id="Fajr">İmsak: <span></span></div>
+    <div class="prayer-time" id="Sunrise">Güneş: <span></span></div>
+    <div class="prayer-time" id="Dhuhr">Öğle: <span></span></div>
+    <div class="prayer-time" id="Asr">İkindi: <span></span></div>
+    <div class="prayer-time" id="Maghrib">Akşam: <span></span></div>
+    <div class="prayer-time" id="Isha">Yatsı: <span></span></div>
+    <div class="countdown" id="countdown">Geri sayım: --</div>
+  </div>
+
+  <audio id="ezanAudio">
+    <source src="https://www.islamcan.com/audio/adhan/azan1.mp3" type="audio/mpeg">
+  </audio>
+
+  <script>
+    const ids = ["Fajr", "Sunrise", "Dhuhr", "Asr", "Maghrib", "Isha"];
+    const names = {
+      Fajr: "İmsak",
+      Sunrise: "Güneş",
+      Dhuhr: "Öğle",
+      Asr: "İkindi",
+      Maghrib: "Akşam",
+      Isha: "Yatsı"
+    };
+
+    function fetchPrayerTimes() {
+      const today = new Date();
+      document.getElementById("todayDate").innerText = today.toLocaleDateString("tr-TR", {
+        weekday: "long", year: "numeric", month: "long", day: "numeric"
+      }).toUpperCase();
+
+      fetch("https://api.aladhan.com/v1/timingsByCity?city=Ankara&country=Turkey&method=13")
+        .then(res => res.json())
+        .then(data => {
+          const timings = data.data.timings;
+          ids.forEach(id => {
+            document.querySelector(`#${id} span`).innerText = timings[id];
+          });
+          startCountdown(timings);
+        });
+    }
+
+    function startCountdown(timings) {
+      const now = new Date();
+      let nextPrayer = null;
+      let nextTime = null;
+
+      for (let id of ids) {
+        const [hour, minute] = timings[id].split(":").map(Number);
+        const prayerTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute);
+        if (prayerTime > now) {
+          nextPrayer = id;
+          nextTime = prayerTime;
+          break;
+        }
+      }
+
+      if (!nextPrayer) {
+        nextPrayer = "Fajr";
+        const [h, m] = timings.Fajr.split(":").map(Number);
+        nextTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, h, m);
+      }
+
+      ids.forEach(id => document.getElementById(id).classList.remove("highlight"));
+      document.getElementById(nextPrayer).classList.add("highlight");
+
+      const interval = setInterval(() => {
+        const now = new Date();
+        const diff = nextTime - now;
+
+        if (diff <= 0) {
+          clearInterval(interval);
+          document.getElementById("ezanAudio").play();
+          fetchPrayerTimes();
+        } else {
+          const hours = Math.floor(diff / (1000 * 60 * 60));
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+          document.getElementById("countdown").innerText = `${names[nextPrayer]} vaktine kalan: ${hours} saat ${minutes} dakika ${seconds} saniye`;
+        }
+      }, 1000);
+    }
+
+    fetchPrayerTimes();
+  </script>
+</body>
+</html>
