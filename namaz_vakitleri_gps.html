@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=360, initial-scale=1.0"/>
+  <title>Namaz Vakitleri</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #ccc;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .phone {
+      width: 360px;
+      height: 640px;
+      background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
+      border-radius: 20px;
+      overflow: hidden;
+      padding: 20px;
+    }
+    .date {
+      text-align: center;
+      font-size: 1.2em;
+      margin-bottom: 15px;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 2px solid #ff6f61;
+      font-weight: bold;
+      color: #2f4f4f;
+    }
+    .prayer-time {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      font-size: 1.1em;
+      max-width: 320px;
+      margin-left: auto;
+      margin-right: auto;
+      color: #2f4f4f;
+    }
+    .highlight {
+      border: 2px solid #ff6f61;
+      font-weight: bold;
+    }
+    .countdown-title {
+      text-align: center;
+      font-size: 0.8em;
+      text-transform: uppercase;
+      font-weight: bold;
+      margin-top: 18px;
+      color: #2f4f4f;
+    }
+    .countdown {
+      text-align: center;
+      font-size: 2.5em;
+      font-weight: bold;
+      color: #2f4f4f;
+    }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="date" id="todayDate">Konum belirleniyor...</div>
+    <div class="prayer-time" id="Fajr">İmsak: <span></span></div>
+    <div class="prayer-time" id="Sunrise">Güneş: <span></span></div>
+    <div class="prayer-time" id="Dhuhr">Öğle: <span></span></div>
+    <div class="prayer-time" id="Asr">İkindi: <span></span></div>
+    <div class="prayer-time" id="Maghrib">Akşam: <span></span></div>
+    <div class="prayer-time" id="Isha">Yatsı: <span></span></div>
+    <div class="countdown-title" id="countdownTitle">Geri Sayım</div>
+    <div class="countdown" id="countdown">--</div>
+  </div>
+
+  <script>
+    const ids = ["Fajr", "Sunrise", "Dhuhr", "Asr", "Maghrib", "Isha"];
+    const names = {
+      Fajr: "İmsak", Sunrise: "Güneş", Dhuhr: "Öğle",
+      Asr: "İkindi", Maghrib: "Akşam", Isha: "Yatsı"
+    };
+
+    function fetchPrayerTimesByCoordinates(lat, lon) {
+      const today = new Date();
+      document.getElementById("todayDate").innerText =
+        `Konum: ${lat.toFixed(2)}, ${lon.toFixed(2)} - ` +
+        today.toLocaleDateString("tr-TR", { weekday: "long", year: "numeric", month: "long", day: "numeric" }).toUpperCase();
+
+      fetch(`https://api.aladhan.com/v1/timings?latitude=${lat}&longitude=${lon}&method=13`)
+        .then(res => res.json())
+        .then(data => {
+          const timings = data.data.timings;
+          ids.forEach(id => {
+            document.querySelector(`#${id} span`).innerText = timings[id];
+          });
+          startCountdown(timings);
+        })
+        .catch(() => alert("Namaz vakitleri alınamadı."));
+    }
+
+    function startCountdown(timings) {
+      const now = new Date();
+      let nextPrayer = null;
+      let nextTime = null;
+
+      for (let id of ids) {
+        const [hour, minute] = timings[id].split(":").map(Number);
+        const prayerTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute);
+        if (prayerTime > now) {
+          nextPrayer = id;
+          nextTime = prayerTime;
+          break;
+        }
+      }
+
+      if (!nextPrayer) {
+        nextPrayer = "Fajr";
+        const [h, m] = timings.Fajr.split(":").map(Number);
+        nextTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, h, m);
+      }
+
+      ids.forEach(id => document.getElementById(id).classList.remove("highlight"));
+      document.getElementById(nextPrayer).classList.add("highlight");
+
+      const interval = setInterval(() => {
+        const now = new Date();
+        const diff = nextTime - now;
+
+        if (diff <= 0) {
+          clearInterval(interval);
+          location.reload(); // sayfayı yenile
+        } else {
+          const hours = Math.floor(diff / (1000 * 60 * 60));
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+          document.getElementById("countdownTitle").innerText = `${names[nextPrayer]} VAKTİNE KALAN`;
+          document.getElementById("countdown").innerText =
+            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+      }, 1000);
+    }
+
+    function getLocationAndFetchTimes() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          position => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            fetchPrayerTimesByCoordinates(lat, lon);
+          },
+          error => {
+            alert("Konum alınamadı. Lütfen izin verin.");
+          }
+        );
+      } else {
+        alert("Tarayıcınız konum almayı desteklemiyor.");
+      }
+    }
+
+    getLocationAndFetchTimes();
+  </script>
+</body>
+</html>
